@@ -1,6 +1,6 @@
 FROM alpine/git AS COPYER
 
-RUN cd /tmp && git clone https://github.com/litong01/pathecho.git
+RUN cd /tmp && git clone --depth 1 https://github.com/litong01/pathecho.git
 
 FROM golang:1.14.9-alpine3.12 as BUILDER
 COPY --from=COPYER /tmp/pathecho /go/src/github.com/pathecho

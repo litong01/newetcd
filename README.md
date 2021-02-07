@@ -1,8 +1,8 @@
 # pathecho
-Echo the request path as the response
+Echo the request path as the response body
 
-This is a simple golang app which response to a request url
-as its response body. This is specifically made to accomendate
+This is a simple golang app which responses to a request url
+as its response body. This was specifically made to accomendate
 letencrypt dns challenge.
 
 
