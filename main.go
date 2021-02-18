@@ -1,8 +1,8 @@
 package main
 
 import (
-	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 )
@@ -15,8 +15,13 @@ func main() {
 		return
 	})
 
-	err := http.ListenAndServe(":8080", r)
-	if err != nil {
-		log.Fatal(err.Error())
+	cert := os.Getenv("TLS_CERT")
+	key := os.Getenv("TLS_KEY")
+
+	if len(cert) > 0 && len(key) > 0 {
+		http.ListenAndServeTLS(":8443", cert, key, r)	
+	} else {
+		http.ListenAndServe(":8080", r)		
 	}
+
 }
