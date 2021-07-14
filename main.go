@@ -13,7 +13,8 @@ func main() {
 
 	r := mux.NewRouter()
 	r.PathPrefix("/").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("Request:  %s://%s:%s/%s", r.Proto, r.Host, r.URL.Port(), r.URL.Path)
+		log.Printf("Protocol: %s", r.Proto)
+		log.Printf("Request:  %s%s", r.RemoteAddr, r.URL.Path)
 		w.Write([]byte(r.RequestURI))
 	})
 
