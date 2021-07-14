@@ -13,7 +13,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.PathPrefix("/").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Request:" + r.RemoteAddr)
+		log.Println("Request:" + r.Host + ":" + r.URL.Port())
 		w.Write([]byte(r.RequestURI))
 	})
 
@@ -70,7 +70,7 @@ func main() {
 			Addr:         ":8080",
 			Handler:      r,
 			TLSConfig:    cfg,
-			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
+			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 		}
 
 		err = srv.ListenAndServeTLS(cert, key)
