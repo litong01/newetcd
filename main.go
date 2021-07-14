@@ -2,9 +2,9 @@ package main
 
 import (
 	"crypto/tls"
+	"log"
 	"net/http"
 	"os"
-	"log"
 
 	"github.com/gorilla/mux"
 )
@@ -13,8 +13,8 @@ func main() {
 
 	r := mux.NewRouter()
 	r.PathPrefix("/").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Request:" + r.URL.RawPath)
 		w.Write([]byte(r.RequestURI))
-		return
 	})
 
 	cert := os.Getenv("TLS_CERT")
@@ -28,7 +28,7 @@ func main() {
 
 		cfg := &tls.Config{
 			MinVersion:               tls.VersionTLS10,
-			MaxVersion:				  tls.VersionTLS13,
+			MaxVersion:               tls.VersionTLS13,
 			CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
 			PreferServerCipherSuites: true,
 			CipherSuites: []uint16{
