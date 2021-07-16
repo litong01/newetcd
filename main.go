@@ -13,7 +13,11 @@ func main() {
 
 	r := mux.NewRouter()
 	r.PathPrefix("/").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("Protocol: %s", r.Proto)
+		if r.TLS != nil {
+			log.Printf("Scheme: https. Server name: %s", r.TLS.ServerName)
+		} else {
+			log.Printf("Scheme: %s", "http")
+		}
 		log.Printf("Request:  %s%s", r.RemoteAddr, r.URL.Path)
 		w.Write([]byte(r.RequestURI))
 	})
