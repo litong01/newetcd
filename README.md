@@ -42,7 +42,6 @@ spec:
       labels:
         app: pathecho-31056
     spec:
-      serviceAccountName: pathecho-account
       volumes:
         - name: tlskeys
           secret:
