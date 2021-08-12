@@ -2,9 +2,11 @@ package main
 
 import (
 	"crypto/tls"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -12,6 +14,16 @@ import (
 func main() {
 
 	r := mux.NewRouter()
+	r.PathPrefix("/healthz").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t := time.Now()
+		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07d",
+			t.Year(), t.Month(), t.Day(),
+			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
+		w.Header().Set("Content-Type", "application/json")
+		content := `{"status": "OK", "time": "` + formatted + "\"}"
+		w.Write([]byte(content))
+	})
+
 	r.PathPrefix("/").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.TLS != nil {
 			log.Printf("Scheme: https. Server name: %s", r.TLS.ServerName)
