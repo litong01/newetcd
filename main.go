@@ -16,7 +16,7 @@ func main() {
 	r := mux.NewRouter()
 	r.PathPrefix("/healthz").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
-		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07d",
+		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
 			t.Year(), t.Month(), t.Day(),
 			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
 		w.Header().Set("Content-Type", "application/json")
