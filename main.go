@@ -20,7 +20,7 @@ func main() {
 			t.Year(), t.Month(), t.Day(),
 			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
 		w.Header().Set("Content-Type", "application/json")
-		content := `{"status": "OK", "time": "` + formatted + "\"}"
+		content := `{"status":"OK","time":"` + formatted + "\"}"
 		w.Write([]byte(content))
 	})
 
