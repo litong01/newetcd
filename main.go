@@ -36,6 +36,12 @@ func main() {
 
 	cert := os.Getenv("TLS_CERT")
 	key := os.Getenv("TLS_KEY")
+	port := os.Getenv("PORT")
+	if len(port) == 0 {
+		port = ":8080"
+	} else {
+		port = ":" + port
+	}
 
 	var err error
 	if len(cert) > 0 && len(key) > 0 {
@@ -84,7 +90,7 @@ func main() {
 			},
 		}
 		srv := &http.Server{
-			Addr:         ":8080",
+			Addr:         port,
 			Handler:      r,
 			TLSConfig:    cfg,
 			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
@@ -93,7 +99,7 @@ func main() {
 		err = srv.ListenAndServeTLS(cert, key)
 	} else {
 		log.Println("TLS disabled")
-		err = http.ListenAndServe(":8080", r)
+		err = http.ListenAndServe(port, r)
 	}
 
 	if err != nil {
