@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -22,6 +23,23 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		content := `{"status":"OK","time":"` + formatted + "\"}"
 		w.Write([]byte(content))
+	})
+
+	r.PathPrefix("/version").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target := os.Getenv("version")
+		w.Header().Set("Content-Type", "application/json")
+		content := `{"status":"FAIL"}`
+		resp, err := http.Get(target)
+		if err != nil || resp.StatusCode != 200 {
+			w.Write([]byte(content))
+			return
+		}
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			w.Write([]byte(content))
+			return
+		}
+		w.Write(data)
 	})
 
 	r.PathPrefix("/").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
