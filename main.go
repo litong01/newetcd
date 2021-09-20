@@ -3,7 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -34,7 +34,7 @@ func main() {
 			w.Write([]byte(content))
 			return
 		}
-		data, err := io.ReadAll(resp.Body)
+		data, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			w.Write([]byte(content))
 			return
