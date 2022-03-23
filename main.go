@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+	doLog := os.Getenv("DOLOG")
 
 	r := mux.NewRouter()
 	r.PathPrefix("/healthz").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,12 +44,14 @@ func main() {
 	})
 
 	r.PathPrefix("/").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.TLS != nil {
-			log.Printf("Scheme: https. Server name: %s", r.TLS.ServerName)
-		} else {
-			log.Printf("Scheme: %s", "http")
+		if doLog == "True" {
+			if r.TLS != nil {
+				log.Printf("Scheme: https. Server name: %s", r.TLS.ServerName)
+			} else {
+				log.Printf("Scheme: %s", "http")
+			}
+			log.Printf("Request:  %s%s", r.RemoteAddr, r.URL.Path)
 		}
-		log.Printf("Request:  %s%s", r.RemoteAddr, r.URL.Path)
 		w.Write([]byte(r.RequestURI))
 	})
 
