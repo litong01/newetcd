@@ -47,3 +47,10 @@ jobs:
         docker buildx build --push \
           --tag email4tong/pathecho:${{env.IMAGE_TAG}} \
           --platform linux/amd64,linux/arm64 .
+
+    - name: Build and push images with latest tag
+      run: |
+        docker buildx build --push \
+          --tag email4tong/pathecho:latest \
+          --platform linux/amd64,linux/arm64 .
+    
