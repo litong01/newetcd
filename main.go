@@ -28,7 +28,7 @@ func main() {
 		w.Write([]byte(content))
 	})
 
-	r.PathPrefix("/post/").Methods("POST").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.PathPrefix("/post").Methods("POST").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
 			t.Year(), t.Month(), t.Day(),
