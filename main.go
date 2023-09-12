@@ -3,7 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -22,8 +22,20 @@ func main() {
 		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
 			t.Year(), t.Month(), t.Day(),
 			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
+		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
 		content := `{"status":"OK","time":"` + formatted + "\"}"
+		w.Write([]byte(content))
+	})
+
+	r.PathPrefix("/post/").Methods("POST").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t := time.Now()
+		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
+			t.Year(), t.Month(), t.Day(),
+			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
+		w.WriteHeader(http.StatusCreated)
+		w.Header().Set("Content-Type", "application/json")
+		content := `{"status":"Created","time":"` + formatted + "\"}"
 		w.Write([]byte(content))
 	})
 
@@ -36,7 +48,7 @@ func main() {
 			w.Write([]byte(content))
 			return
 		}
-		data, err := ioutil.ReadAll(resp.Body)
+		data, err := io.ReadAll(resp.Body)
 		if err != nil {
 			w.Write([]byte(content))
 			return
