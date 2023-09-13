@@ -136,7 +136,7 @@ func main() {
 	if len(cert) > 0 && len(key) > 0 {
 		Logger.Info("TLS enabled")
 		Logger.Info("Certificate", "cert", cert)
-		Logger.Info("Certufucate", "key", key)
+		Logger.Info("Certificate", "key", key)
 
 		cfg := &tls.Config{
 			MinVersion:               tls.VersionTLS10,
