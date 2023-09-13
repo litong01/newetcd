@@ -4,17 +4,35 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"time"
+
+	goslog "golang.org/x/exp/slog"
 
 	"github.com/gorilla/mux"
 	"github.com/pathecho/auth"
 )
 
-func main() {
+var (
+	Logger *goslog.Logger
+	opts   goslog.HandlerOptions
+)
+
+func init() {
 	doLog := os.Getenv("DOLOG")
+	// TODO getting configuration parameters of the control,
+	// then use these parameters to customize the logger.
+	if doLog == "" {
+		opts.Level = goslog.LevelError
+	} else {
+		opts.Level = goslog.LevelInfo
+	}
+	Logger = goslog.New(goslog.NewJSONHandler(os.Stdout, &opts))
+	goslog.SetDefault(Logger)
+}
+
+func main() {
 
 	r := mux.NewRouter()
 	r.PathPrefix("/healthz").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -26,17 +44,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		content := `{"status":"OK","time":"` + formatted + "\"}"
 		w.Write([]byte(content))
-	})
-
-	r.PathPrefix("/post").Methods("POST").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t := time.Now()
-		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
-			t.Year(), t.Month(), t.Day(),
-			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
-		w.WriteHeader(http.StatusCreated)
-		w.Header().Set("Content-Type", "application/json")
-		content := `{"status":"Created","time":"` + formatted + "\"}"
-		w.Write([]byte(content))
+		Logger.Info("GET", "path", r.RequestURI)
 	})
 
 	r.PathPrefix("/version").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -56,6 +64,50 @@ func main() {
 		w.Write(data)
 	})
 
+	r.PathPrefix("/").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(r.RequestURI))
+		Logger.Info("GET", "path", r.RequestURI)
+	})
+
+	r.PathPrefix("/").Methods("POST").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t := time.Now()
+		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
+			t.Year(), t.Month(), t.Day(),
+			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
+		w.WriteHeader(http.StatusCreated)
+		w.Header().Set("Content-Type", "application/json")
+		content := `{"status":"Created","time":"` + formatted + "\"}"
+		w.Write([]byte(content))
+
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			Logger.Error("Read post body", "Error", err.Error())
+		}
+		Logger.Info("POST", "path", r.RequestURI, "content", string(data))
+	})
+
+	r.PathPrefix("/").Methods("PUT").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t := time.Now()
+		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
+			t.Year(), t.Month(), t.Day(),
+			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		content := `{"status":"Modified","time":"` + formatted + "\"}"
+		w.Write([]byte(content))
+
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			Logger.Error("Read put body", "Error", err.Error())
+		}
+		Logger.Info("PUT", "path", r.RequestURI, "content", string(data))
+	})
+
+	r.PathPrefix("/").Methods("DELETE").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		Logger.Info("DELETE", "path", r.RequestURI)
+	})
+
 	// If this is to setup to deal with protected resources
 	// For protected resouces
 	if auth.IsSecurityEnabled() {
@@ -71,18 +123,6 @@ func main() {
 		r.Path("/api/callback").Methods("GET").HandlerFunc(authenticator.APICallback)
 	}
 
-	r.PathPrefix("/").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if doLog == "True" {
-			if r.TLS != nil {
-				log.Printf("Scheme: https. Server name: %s", r.TLS.ServerName)
-			} else {
-				log.Printf("Scheme: %s", "http")
-			}
-			log.Printf("Request:  %s%s", r.RemoteAddr, r.URL.Path)
-		}
-		w.Write([]byte(r.RequestURI))
-	})
-
 	cert := os.Getenv("TLS_CERT")
 	key := os.Getenv("TLS_KEY")
 	port := os.Getenv("PORT")
@@ -94,9 +134,9 @@ func main() {
 
 	var err error
 	if len(cert) > 0 && len(key) > 0 {
-		log.Println("TLS enabled")
-		log.Printf("The cert is at %s", cert)
-		log.Printf("The key is at %s", key)
+		Logger.Info("TLS enabled")
+		Logger.Info("Certificate", "cert", cert)
+		Logger.Info("Certufucate", "key", key)
 
 		cfg := &tls.Config{
 			MinVersion:               tls.VersionTLS10,
@@ -147,11 +187,11 @@ func main() {
 
 		err = srv.ListenAndServeTLS(cert, key)
 	} else {
-		log.Println("TLS disabled")
+		Logger.Info("TLS disabled")
 		err = http.ListenAndServe(port, r)
 	}
 
 	if err != nil {
-		log.Fatal(err.Error())
+		Logger.Error(err.Error())
 	}
 }
