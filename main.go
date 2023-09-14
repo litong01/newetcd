@@ -1,11 +1,13 @@
 package main
 
 import (
+	"compress/gzip"
 	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	goslog "golang.org/x/exp/slog"
@@ -74,16 +76,42 @@ func main() {
 		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
 			t.Year(), t.Month(), t.Day(),
 			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
-		w.WriteHeader(http.StatusCreated)
-		w.Header().Set("Content-Type", "application/json")
-		content := `{"status":"Created","time":"` + formatted + "\"}"
-		w.Write([]byte(content))
 
-		data, err := io.ReadAll(r.Body)
-		if err != nil {
-			Logger.Error("Read post body", "Error", err.Error())
+		var data []byte
+		var err error
+		defer r.Body.Close()
+		Logger.Info("Accept-Encoding header", "value", r.Header.Get("Accept-Encoding"))
+		if strings.Contains(strings.ToLower(r.Header.Get("Accept-Encoding")), "gzip") {
+			var reader *gzip.Reader
+			reader, err = gzip.NewReader(r.Body)
+			if err != nil {
+				Logger.Error("Cannot create gzip reader", "Error", err.Error())
+			} else {
+				defer reader.Close()
+				data, err = io.ReadAll(reader)
+				if err != nil {
+					Logger.Error("Cannot read from unzipped body", "Error", err.Error())
+				}
+			}
+		} else {
+			data, err = io.ReadAll(r.Body)
+			if err != nil {
+				Logger.Error("Cannot read from request body", "Error", err.Error())
+			}
 		}
-		Logger.Info("POST", "path", r.RequestURI, "content", string(data))
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			content := `{"status":"Failed","time":"` + formatted + `"error":"` + err.Error() + `"}`
+			w.Write([]byte(content))
+		} else {
+			w.WriteHeader(http.StatusCreated)
+			w.Header().Set("Content-Type", "application/json")
+			content := `{"status":"Created","time":"` + formatted + "\"}"
+			w.Write([]byte(content))
+			Logger.Info("POST", "path", r.RequestURI, "content", string(data))
+		}
 	})
 
 	r.PathPrefix("/").Methods("PUT").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
