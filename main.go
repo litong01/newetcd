@@ -80,7 +80,8 @@ func main() {
 		var data []byte
 		var err error
 		defer r.Body.Close()
-		Logger.Info("Accept-Encoding header", "value", r.Header.Get("Accept-Encoding"))
+		Logger.Info("Header value", "Accept-Encoding", r.Header.Get("Accept-Encoding"))
+		Logger.Info("Header value", "Authorization", r.Header.Get("Authorization"))
 		if strings.Contains(strings.ToLower(r.Header.Get("Accept-Encoding")), "gzip") {
 			var reader *gzip.Reader
 			reader, err = gzip.NewReader(r.Body)
