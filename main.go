@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,6 +33,63 @@ func init() {
 	}
 	Logger = goslog.New(goslog.NewJSONHandler(os.Stdout, &opts))
 	goslog.SetDefault(Logger)
+}
+
+func handlerFunc(w http.ResponseWriter, r *http.Request) {
+	t := time.Now()
+	formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
+		t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
+
+	var data []byte
+	var err error
+	defer r.Body.Close()
+	Logger.Info("Header value", "Accept-Encoding", r.Header.Get("Accept-Encoding"))
+	Logger.Info("Header value", "Authorization", r.Header.Get("Authorization"))
+	if strings.Contains(strings.ToLower(r.Header.Get("Accept-Encoding")), "gzip") {
+		var reader *gzip.Reader
+		reader, err = gzip.NewReader(r.Body)
+		if err != nil {
+			Logger.Error("Cannot create gzip reader", "Error", err.Error())
+		} else {
+			defer reader.Close()
+			data, err = io.ReadAll(reader)
+			if err != nil {
+				Logger.Error("Cannot read from unzipped body", "Error", err.Error())
+			}
+		}
+	} else {
+		data, err = io.ReadAll(r.Body)
+		if err != nil {
+			Logger.Error("Cannot read from request body", "Error", err.Error())
+		}
+	}
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		content := `{"status": "Failed", "time": "` + formatted + `, "error":"` + err.Error() + `"}`
+		w.Write([]byte(content))
+	} else {
+		if r.Method == "PUT" {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusCreated)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		content := `{"status": "Created", "time": "` + formatted + `"}`
+		if r.Method == "PUT" {
+			content = `{"status": "Updated", "time": "` + formatted + `"}`
+		}
+		w.Write([]byte(content))
+		if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+			var jsonData interface{}
+			json.Unmarshal(data, &jsonData)
+			Logger.Info(r.Method, "path", r.RequestURI, "content", jsonData)
+		} else {
+			Logger.Info(r.Method, "path", r.RequestURI, "content", string(data))
+		}
+	}
 }
 
 func main() {
@@ -71,66 +129,7 @@ func main() {
 		Logger.Info("GET", "path", r.RequestURI)
 	})
 
-	r.PathPrefix("/").Methods("POST").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t := time.Now()
-		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
-			t.Year(), t.Month(), t.Day(),
-			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
-
-		var data []byte
-		var err error
-		defer r.Body.Close()
-		Logger.Info("Header value", "Accept-Encoding", r.Header.Get("Accept-Encoding"))
-		Logger.Info("Header value", "Authorization", r.Header.Get("Authorization"))
-		if strings.Contains(strings.ToLower(r.Header.Get("Accept-Encoding")), "gzip") {
-			var reader *gzip.Reader
-			reader, err = gzip.NewReader(r.Body)
-			if err != nil {
-				Logger.Error("Cannot create gzip reader", "Error", err.Error())
-			} else {
-				defer reader.Close()
-				data, err = io.ReadAll(reader)
-				if err != nil {
-					Logger.Error("Cannot read from unzipped body", "Error", err.Error())
-				}
-			}
-		} else {
-			data, err = io.ReadAll(r.Body)
-			if err != nil {
-				Logger.Error("Cannot read from request body", "Error", err.Error())
-			}
-		}
-
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Header().Set("Content-Type", "application/json")
-			content := `{"status":"Failed","time":"` + formatted + `"error":"` + err.Error() + `"}`
-			w.Write([]byte(content))
-		} else {
-			w.WriteHeader(http.StatusCreated)
-			w.Header().Set("Content-Type", "application/json")
-			content := `{"status":"Created","time":"` + formatted + "\"}"
-			w.Write([]byte(content))
-			Logger.Info("POST", "path", r.RequestURI, "content", string(data))
-		}
-	})
-
-	r.PathPrefix("/").Methods("PUT").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t := time.Now()
-		formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
-			t.Year(), t.Month(), t.Day(),
-			t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
-		w.WriteHeader(http.StatusOK)
-		w.Header().Set("Content-Type", "application/json")
-		content := `{"status":"Modified","time":"` + formatted + "\"}"
-		w.Write([]byte(content))
-
-		data, err := io.ReadAll(r.Body)
-		if err != nil {
-			Logger.Error("Read put body", "Error", err.Error())
-		}
-		Logger.Info("PUT", "path", r.RequestURI, "content", string(data))
-	})
+	r.PathPrefix("/").Methods("POST", "PUT").HandlerFunc(handlerFunc)
 
 	r.PathPrefix("/").Methods("DELETE").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
