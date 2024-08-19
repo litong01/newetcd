@@ -1,4 +1,4 @@
-name: Pathecho CI
+name: Tinyetcd CI
 
 on:
   push:
