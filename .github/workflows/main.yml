@@ -25,19 +25,19 @@ jobs:
       run: docker version
 
     - name: Checkout sources
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
  
-    - name: Build pathecho container image locally
-      run: docker build -t email4tong/pathecho:${{ env.IMAGE_TAG }} .
+    - name: Build tinyetcd container image locally
+      run: docker build -t email4tong/tinyetcd:${{ env.IMAGE_TAG }} .
 
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v2
+      uses: docker/setup-qemu-action@v3
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@v3
 
     - name: Login to DockerHub
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         username: ${{ secrets.DH_USER }}
         password: ${{ secrets.DH_KEY }}
@@ -45,12 +45,12 @@ jobs:
     - name: Build and push images
       run: |
         docker buildx build --push \
-          --tag email4tong/pathecho:${{env.IMAGE_TAG}} \
+          --tag email4tong/tinyetcd:${{env.IMAGE_TAG}} \
           --platform linux/amd64,linux/arm64 .
 
     - name: Build and push images with latest tag
       run: |
         docker buildx build --push \
-          --tag email4tong/pathecho:latest \
+          --tag email4tong/tinyetcd:latest \
           --platform linux/amd64,linux/arm64 .
     

@@ -1,26 +1,57 @@
 package main
 
 import (
-	"compress/gzip"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
-	"strings"
+	"sync"
 	"time"
 
-	goslog "golang.org/x/exp/slog"
+	goslog "log/slog"
 
 	"github.com/gorilla/mux"
-	"github.com/pathecho/auth"
+	"github.com/itchyny/gojq"
 )
 
 var (
 	Logger *goslog.Logger
 	opts   goslog.HandlerOptions
 )
+
+var (
+	storeFile = "store.json"
+	mu        sync.Mutex
+)
+
+func loadStore() (map[string]interface{}, error) {
+	file, err := os.Open(storeFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]interface{}), nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	var store map[string]interface{}
+	err = json.NewDecoder(file).Decode(&store)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+func saveStore(store map[string]interface{}) error {
+	file, err := os.Create(storeFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return json.NewEncoder(file).Encode(store)
+}
 
 func init() {
 	doLog := os.Getenv("DOLOG")
@@ -33,63 +64,6 @@ func init() {
 	}
 	Logger = goslog.New(goslog.NewJSONHandler(os.Stdout, &opts))
 	goslog.SetDefault(Logger)
-}
-
-func handlerFunc(w http.ResponseWriter, r *http.Request) {
-	t := time.Now()
-	formatted := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.%07dZ",
-		t.Year(), t.Month(), t.Day(),
-		t.Hour(), t.Minute(), t.Second(), t.Nanosecond())
-
-	var data []byte
-	var err error
-	defer r.Body.Close()
-	Logger.Info("Header value", "Accept-Encoding", r.Header.Get("Accept-Encoding"))
-	Logger.Info("Header value", "Authorization", r.Header.Get("Authorization"))
-	if strings.Contains(strings.ToLower(r.Header.Get("Accept-Encoding")), "gzip") {
-		var reader *gzip.Reader
-		reader, err = gzip.NewReader(r.Body)
-		if err != nil {
-			Logger.Error("Cannot create gzip reader", "Error", err.Error())
-		} else {
-			defer reader.Close()
-			data, err = io.ReadAll(reader)
-			if err != nil {
-				Logger.Error("Cannot read from unzipped body", "Error", err.Error())
-			}
-		}
-	} else {
-		data, err = io.ReadAll(r.Body)
-		if err != nil {
-			Logger.Error("Cannot read from request body", "Error", err.Error())
-		}
-	}
-
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Header().Set("Content-Type", "application/json")
-		content := `{"status": "Failed", "time": "` + formatted + `, "error":"` + err.Error() + `"}`
-		w.Write([]byte(content))
-	} else {
-		if r.Method == "PUT" {
-			w.WriteHeader(http.StatusOK)
-		} else {
-			w.WriteHeader(http.StatusCreated)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		content := `{"status": "Created", "time": "` + formatted + `"}`
-		if r.Method == "PUT" {
-			content = `{"status": "Updated", "time": "` + formatted + `"}`
-		}
-		w.Write([]byte(content))
-		if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-			var jsonData interface{}
-			json.Unmarshal(data, &jsonData)
-			Logger.Info(r.Method, "path", r.RequestURI, "content", jsonData)
-		} else {
-			Logger.Info(r.Method, "path", r.RequestURI, "content", string(data))
-		}
-	}
 }
 
 func main() {
@@ -107,49 +81,86 @@ func main() {
 		Logger.Info("GET", "path", r.RequestURI)
 	})
 
-	r.PathPrefix("/version").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		target := os.Getenv("version")
-		w.Header().Set("Content-Type", "application/json")
-		content := `{"status":"FAIL"}`
-		resp, err := http.Get(target)
-		if err != nil || resp.StatusCode != 200 {
-			w.Write([]byte(content))
-			return
-		}
-		data, err := io.ReadAll(resp.Body)
+	r.PathPrefix("/").Methods("PUT").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := r.URL.Query().Get("key")
+		value := r.URL.Query().Get("value")
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		store, err := loadStore()
 		if err != nil {
-			w.Write([]byte(content))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Write(data)
+
+		query, err := gojq.Parse(fmt.Sprintf(".%s = \"%s\"", key, value))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		code, err := gojq.Compile(query)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		iter := code.Run(store)
+		for {
+			v, ok := iter.Next()
+			if !ok {
+				break
+			}
+			if err, ok := v.(error); ok {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			store = v.(map[string]interface{})
+		}
+
+		err = saveStore(store)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		fmt.Fprintf(w, "Put key=%s value=%s\n", key, value)
 	})
 
 	r.PathPrefix("/").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(r.RequestURI))
-		Logger.Info("GET", "path", r.RequestURI)
+		key := r.URL.Query().Get("key")
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		store, err := loadStore()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		query, err := gojq.Parse(fmt.Sprintf(".%s", key))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		code, err := gojq.Compile(query)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		iter := code.Run(store)
+		for {
+			v, ok := iter.Next()
+			if !ok {
+				break
+			}
+			if err, ok := v.(error); ok {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			fmt.Fprintf(w, "%s\n", v)
+		}
 	})
-
-	r.PathPrefix("/").Methods("POST", "PUT").HandlerFunc(handlerFunc)
-
-	r.PathPrefix("/").Methods("DELETE").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-		Logger.Info("DELETE", "path", r.RequestURI)
-	})
-
-	// If this is to setup to deal with protected resources
-	// For protected resouces
-	if auth.IsSecurityEnabled() {
-		secured := r.PathPrefix("/secured").Subrouter()
-		authenticator := auth.New()
-		secured.Use(authenticator.Middleware())
-		// regardless what method call, always write the request uri back
-		// to the body
-		secured.Path("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(r.RequestURI))
-		})
-
-		r.Path("/api/callback").Methods("GET").HandlerFunc(authenticator.APICallback)
-	}
 
 	cert := os.Getenv("TLS_CERT")
 	key := os.Getenv("TLS_KEY")
