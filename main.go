@@ -53,6 +53,21 @@ func saveStore(store map[string]interface{}) error {
 	return json.NewEncoder(file).Encode(store)
 }
 
+func handleJSON(w http.ResponseWriter, r *http.Request) *map[string]interface{} {
+	var data map[string]interface{}
+
+	// Decode the JSON request body into the map
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return nil
+	}
+
+	// Do something with the data (for example, print it)
+	fmt.Fprintf(w, "Received JSON: %+v", data)
+	return &data
+}
+
 func init() {
 	doLog := os.Getenv("DOLOG")
 	// TODO getting configuration parameters of the control,
@@ -82,8 +97,8 @@ func main() {
 	})
 
 	r.PathPrefix("/").Methods("PUT").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		key := r.URL.Query().Get("key")
-		value := r.URL.Query().Get("value")
+		key := r.URL.Path
+		value := handleJSON(w, r)
 
 		mu.Lock()
 		defer mu.Unlock()
